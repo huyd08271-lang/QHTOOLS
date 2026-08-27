@@ -3,7 +3,11 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Studio Viết Truyện AI", page_icon="✍️", layout="wide")
 
-# --- HỆ THỐNG LƯU TRỮ TẠM THỜI ---
+# --- HỆ THỐNG LƯU TRỮ (BAO GỒM CẢ LƯU API KEY) ---
+# Tự động ghi nhớ API Key trong suốt quá trình viết
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
+
 if 'stories' not in st.session_state:
     st.session_state.stories = {
         "Dự án Truyện 1": {
@@ -38,7 +42,9 @@ with st.sidebar:
             
     st.divider()
     st.header("⚙️ Kết Nối AI")
-    api_key = st.text_input("API Key (Google Gemini):", type="password")
+    # Ô nhập API Key giờ đã được liên kết với bộ nhớ đệm
+    st.session_state.api_key = st.text_input("API Key (Google Gemini):", type="password", value=st.session_state.api_key)
+    st.caption("Chỉ cần nhập 1 lần, hệ thống sẽ tự nhớ trong suốt phiên làm việc!")
 
 # --- KHÔNG GIAN LÀM VIỆC CHÍNH ---
 current_data = st.session_state.stories[st.session_state.current_story]
@@ -57,7 +63,7 @@ updated_notes = st.text_area(
     max_chars=20000 
 )
 
-# NÚT LƯU GHI CHÚ MỚI THÊM VÀO
+# Nút lưu ghi chú
 if st.button("💾 Lưu Ghi Chú"):
     st.session_state.stories[st.session_state.current_story]["notes"] = updated_notes
     st.success("Đã lưu ghi chú thành công! Ông có thể thoải mái chuyển truyện khác.")
@@ -86,15 +92,16 @@ st.subheader("✨ Sáng tác chương tiếp theo")
 prompt = st.text_area("Nhập diễn biến ông muốn AI viết tiếp:", height=150)
 
 if st.button("🚀 Viết Tiếp", use_container_width=True):
-    if not api_key:
+    if not st.session_state.api_key:
         st.warning("⚠️ Vui lòng nhập API Key ở menu bên trái!")
     elif not prompt:
         st.warning("⚠️ Vui lòng nhập diễn biến muốn viết!")
     else:
         try:
-            genai.configure(api_key=api_key)
-            # Đã sửa thành model mới nhất để tránh lỗi 404
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            # Sử dụng API Key đã được lưu trong bộ nhớ
+            genai.configure(api_key=st.session_state.api_key)
+            # Dùng phiên bản gemini-pro ổn định nhất để tránh lỗi 404
+            model = genai.GenerativeModel('gemini-pro')
             
             # Gộp cả Ghi chú tổng và Nội dung cũ để AI hiểu văn cảnh
             system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
