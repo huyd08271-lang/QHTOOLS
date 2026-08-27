@@ -3,7 +3,6 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Studio Viết Truyện AI", page_icon="✍️", layout="wide")
 
-# --- HỆ THỐNG LƯU TRỮ (TỰ NHỚ API KEY VÀ NỘI DUNG) ---
 if 'api_key' not in st.session_state:
     st.session_state.api_key = ""
 
@@ -17,7 +16,6 @@ if 'stories' not in st.session_state:
 if 'current_story' not in st.session_state:
     st.session_state.current_story = "Dự án Truyện 1"
 
-# --- THANH MENU BÊN TRÁI ---
 with st.sidebar:
     st.header("📚 Quản Lý Truyện")
     
@@ -42,7 +40,6 @@ with st.sidebar:
     st.session_state.api_key = st.text_input("API Key (Google Gemini):", type="password", value=st.session_state.api_key)
     st.caption("Chỉ cần nhập 1 lần, hệ thống sẽ tự nhớ trong suốt phiên làm việc!")
 
-# --- KHÔNG GIAN LÀM VIỆC CHÍNH ---
 current_data = st.session_state.stories[st.session_state.current_story]
 
 st.title(f"📖 {st.session_state.current_story}")
@@ -82,42 +79,27 @@ if st.button("🚀 Viết Tiếp", use_container_width=True):
         try:
             genai.configure(api_key=st.session_state.api_key)
             
-            # --- ĐOẠN RADAR TỰ ĐỘNG DÒ TÌM MODEL ---
-            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            target_model = None
+            # Khai báo đích danh phiên bản hệ thống yêu cầu
+            model = genai.GenerativeModel('gemini-3.6-flash')
+                
+            system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
             
-            # Hệ thống sẽ tự động quét và lấy bản AI chạy được
-            for m in available_models:
-                if 'gemini-1.5-flash' in m:
-                    target_model = m
-                    break
+            BỐI CẢNH VÀ QUY TẮC CỐT LÕI (Bắt buộc tuân thủ):
+            {st.session_state.stories[st.session_state.current_story]["notes"]}
             
-            if not target_model and available_models:
-                target_model = available_models[0]
-                
-            if not target_model:
-                st.error("Lỗi: API Key của ông không có quyền truy cập vào bất kỳ bản AI nào.")
-            else:
-                model = genai.GenerativeModel(target_model)
-                
-                system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
-                
-                BỐI CẢNH VÀ QUY TẮC CỐT LÕI (Bắt buộc tuân thủ):
-                {st.session_state.stories[st.session_state.current_story]["notes"]}
-                
-                TÓM TẮT CÁC CHƯƠNG TRƯỚC (Để giữ mạch truyện liền mạch):
-                {current_data["content"][-4000:]} 
-                
-                YÊU CẦU MỚI: Dựa vào bối cảnh và mạch truyện trên, hãy viết tiếp một chương truyện chi tiết cho diễn biến sau:
-                {prompt}
-                """
-                
-                with st.spinner("Đang chắp bút... Ông đợi một lát nhé!"):
-                    response = model.generate_content(system_prompt)
-                
-                new_chapter = f"\n\n### Ý tưởng: {prompt}\n\n{response.text}\n\n---\n"
-                st.session_state.stories[st.session_state.current_story]["content"] += new_chapter
-                st.rerun() 
-                
+            TÓM TẮT CÁC CHƯƠNG TRƯỚC (Để giữ mạch truyện liền mạch):
+            {current_data["content"][-4000:]} 
+            
+            YÊU CẦU MỚI: Dựa vào bối cảnh và mạch truyện trên, hãy viết tiếp một chương truyện chi tiết cho diễn biến sau:
+            {prompt}
+            """
+            
+            with st.spinner("Đang chắp bút... Ông đợi một lát nhé!"):
+                response = model.generate_content(system_prompt)
+            
+            new_chapter = f"\n\n### Ý tưởng: {prompt}\n\n{response.text}\n\n---\n"
+            st.session_state.stories[st.session_state.current_story]["content"] += new_chapter
+            st.rerun() 
+            
         except Exception as e:
             st.error(f"Đã xảy ra lỗi hệ thống: {e}")
