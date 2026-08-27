@@ -30,7 +30,7 @@ with st.sidebar:
     if st.button("➕ Tạo truyện mới", use_container_width=True):
         if new_story_name and new_story_name not in st.session_state.stories:
             st.session_state.stories[new_story_name] = {
-                "notes": "Hồ sơ Nhân vật: Ngày sinh 5/11/2005. Tính cách quyết đoán.\n\nQUY TẮC THẾ GIỚI (Bắt buộc tuân thủ):\n- TUYỆT ĐỐI KHÔNG dùng từ Hán-Việt sáo rỗng (như linh khí, tu chân).\n- BẮT BUỘC dùng hệ thống thuật ngữ thuần Việt: 'Khí Thiêng', 'Sương Thần'.",
+                "notes": "Hồ sơ Nhân vật: Ngày sinh 5/11/2005. Tính cách quyết đoán.\n\nQUY TẮC THẾ GIỚI (Bắt buộc tuân thủ):\n- TUYỆT ĐỐI KHÔNG dùng từ Hán-Việt sáo rỗng.\n- BẮT BUỘC dùng hệ thống thuật ngữ thuần Việt: 'Khí Thiêng', 'Sương Thần'.",
                 "content": ""
             }
             st.session_state.current_story = new_story_name
@@ -47,14 +47,20 @@ st.title(f"📖 {st.session_state.current_story}")
 
 # 1. Khung Ghi Chú Lớn
 st.subheader("📝 Ghi chú & Thiết lập Thế giới")
-st.caption("Khung này chứa được hàng ngàn chữ. AI sẽ luôn đọc phần này trước khi viết để không bị quên thiết lập của ông.")
+st.caption("Hãy bấm 'Lưu Ghi Chú' ngay sau khi ông viết thêm thiết lập để không bị mất dữ liệu nhé!")
+
+# Khung nhập liệu
 updated_notes = st.text_area(
     "Nội dung ghi chú:", 
     value=current_data["notes"], 
     height=250, 
-    max_chars=20000 # Giới hạn cực lớn cho phép viết tẹt ga
+    max_chars=20000 
 )
-st.session_state.stories[st.session_state.current_story]["notes"] = updated_notes
+
+# NÚT LƯU GHI CHÚ MỚI THÊM VÀO
+if st.button("💾 Lưu Ghi Chú"):
+    st.session_state.stories[st.session_state.current_story]["notes"] = updated_notes
+    st.success("Đã lưu ghi chú thành công! Ông có thể thoải mái chuyển truyện khác.")
 
 st.divider()
 
@@ -87,13 +93,14 @@ if st.button("🚀 Viết Tiếp", use_container_width=True):
     else:
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # Đã sửa thành model mới nhất để tránh lỗi 404
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
             
             # Gộp cả Ghi chú tổng và Nội dung cũ để AI hiểu văn cảnh
             system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
             
             BỐI CẢNH VÀ QUY TẮC CỐT LÕI (Bắt buộc tuân thủ):
-            {updated_notes}
+            {st.session_state.stories[st.session_state.current_story]["notes"]}
             
             TÓM TẮT CÁC CHƯƠNG TRƯỚC (Để giữ mạch truyện liền mạch):
             {current_data["content"][-4000:]} 
@@ -108,7 +115,7 @@ if st.button("🚀 Viết Tiếp", use_container_width=True):
             # Lưu nối tiếp nội dung mới vào bản thảo
             new_chapter = f"\n\n### Ý tưởng: {prompt}\n\n{response.text}\n\n---\n"
             st.session_state.stories[st.session_state.current_story]["content"] += new_chapter
-            st.rerun() # F5 lại trang để hiển thị ngay lập tức
+            st.rerun() 
             
         except Exception as e:
             st.error(f"Đã xảy ra lỗi: {e}")
