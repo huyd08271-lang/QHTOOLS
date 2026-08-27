@@ -3,33 +3,30 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Studio Viết Truyện AI", page_icon="✍️", layout="wide")
 
-# --- HỆ THỐNG LƯU TRỮ (BAO GỒM CẢ LƯU API KEY) ---
-# Tự động ghi nhớ API Key trong suốt quá trình viết
+# --- HỆ THỐNG LƯU TRỮ (TỰ NHỚ API KEY VÀ NỘI DUNG) ---
 if 'api_key' not in st.session_state:
     st.session_state.api_key = ""
 
 if 'stories' not in st.session_state:
     st.session_state.stories = {
         "Dự án Truyện 1": {
-            "notes": "Hồ sơ Nhân vật: Ngày sinh 5/11/2005. Tính cách quyết đoán.\n\nQUY TẮC THẾ GIỚI (Bắt buộc tuân thủ):\n- TUYỆT ĐỐI KHÔNG dùng từ Hán-Việt sáo rỗng (như linh khí, tu chân).\n- BẮT BUỘC dùng hệ thống thuật ngữ thuần Việt: 'Khí Thiêng', 'Sương Thần'.\n\n(Hãy ghi thêm các luật lệ sức mạnh, vật phẩm, bối cảnh vào đây...)",
+            "notes": "Hồ sơ Nhân vật: Ngày sinh 5/11/2005. Tính cách quyết đoán.\n\nQUY TẮC THẾ GIỚI (Bắt buộc tuân thủ):\n- TUYỆT ĐỐI KHÔNG dùng từ Hán-Việt sáo rỗng.\n- BẮT BUỘC dùng hệ thống thuật ngữ thuần Việt: 'Khí Thiêng', 'Sương Thần'.\n\n(Hãy ghi thêm các luật lệ sức mạnh, vật phẩm, bối cảnh vào đây...)",
             "content": ""
         }
     }
 if 'current_story' not in st.session_state:
     st.session_state.current_story = "Dự án Truyện 1"
 
-# --- THANH MENU BÊN TRÁI (QUẢN LÝ TRUYỆN) ---
+# --- THANH MENU BÊN TRÁI ---
 with st.sidebar:
     st.header("📚 Quản Lý Truyện")
     
-    # Dropdown Chọn truyện đang viết
     story_names = list(st.session_state.stories.keys())
     selected_story = st.selectbox("Đang mở bộ truyện:", story_names, index=story_names.index(st.session_state.current_story))
     st.session_state.current_story = selected_story
     
     st.divider()
     
-    # Khu vực tạo truyện mới
     new_story_name = st.text_input("Tên bộ truyện mới:")
     if st.button("➕ Tạo truyện mới", use_container_width=True):
         if new_story_name and new_story_name not in st.session_state.stories:
@@ -42,7 +39,6 @@ with st.sidebar:
             
     st.divider()
     st.header("⚙️ Kết Nối AI")
-    # Ô nhập API Key giờ đã được liên kết với bộ nhớ đệm
     st.session_state.api_key = st.text_input("API Key (Google Gemini):", type="password", value=st.session_state.api_key)
     st.caption("Chỉ cần nhập 1 lần, hệ thống sẽ tự nhớ trong suốt phiên làm việc!")
 
@@ -51,31 +47,18 @@ current_data = st.session_state.stories[st.session_state.current_story]
 
 st.title(f"📖 {st.session_state.current_story}")
 
-# 1. Khung Ghi Chú Lớn
 st.subheader("📝 Ghi chú & Thiết lập Thế giới")
-st.caption("Hãy bấm 'Lưu Ghi Chú' ngay sau khi ông viết thêm thiết lập để không bị mất dữ liệu nhé!")
+updated_notes = st.text_area("Nội dung ghi chú:", value=current_data["notes"], height=250, max_chars=20000)
 
-# Khung nhập liệu
-updated_notes = st.text_area(
-    "Nội dung ghi chú:", 
-    value=current_data["notes"], 
-    height=250, 
-    max_chars=20000 
-)
-
-# Nút lưu ghi chú
 if st.button("💾 Lưu Ghi Chú"):
     st.session_state.stories[st.session_state.current_story]["notes"] = updated_notes
-    st.success("Đã lưu ghi chú thành công! Ông có thể thoải mái chuyển truyện khác.")
+    st.success("Đã lưu ghi chú thành công!")
 
 st.divider()
 
-# 2. Lịch sử Truyện (Lưu nối tiếp các chương)
 st.subheader("📜 Nội dung bản thảo")
 if current_data["content"]:
     st.markdown(current_data["content"])
-    
-    # Nút tải file về máy để không bị mất dữ liệu
     st.download_button(
         label="📥 Tải bộ truyện này xuống máy (File TXT)",
         data=current_data["content"],
@@ -87,7 +70,6 @@ else:
 
 st.divider()
 
-# 3. Khu vực Sinh Chương Mới
 st.subheader("✨ Sáng tác chương tiếp theo")
 prompt = st.text_area("Nhập diễn biến ông muốn AI viết tiếp:", height=150)
 
@@ -98,31 +80,44 @@ if st.button("🚀 Viết Tiếp", use_container_width=True):
         st.warning("⚠️ Vui lòng nhập diễn biến muốn viết!")
     else:
         try:
-            # Sử dụng API Key đã được lưu trong bộ nhớ
             genai.configure(api_key=st.session_state.api_key)
-            # Dùng phiên bản gemini-pro ổn định nhất để tránh lỗi 404
-            model = genai.GenerativeModel('gemini-pro')
             
-            # Gộp cả Ghi chú tổng và Nội dung cũ để AI hiểu văn cảnh
-            system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
+            # --- ĐOẠN RADAR TỰ ĐỘNG DÒ TÌM MODEL ---
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            target_model = None
             
-            BỐI CẢNH VÀ QUY TẮC CỐT LÕI (Bắt buộc tuân thủ):
-            {st.session_state.stories[st.session_state.current_story]["notes"]}
+            # Hệ thống sẽ tự động quét và lấy bản AI chạy được
+            for m in available_models:
+                if 'gemini-1.5-flash' in m:
+                    target_model = m
+                    break
             
-            TÓM TẮT CÁC CHƯƠNG TRƯỚC (Để giữ mạch truyện liền mạch):
-            {current_data["content"][-4000:]} 
-            
-            YÊU CẦU MỚI: Dựa vào bối cảnh và mạch truyện trên, hãy viết tiếp một chương truyện chi tiết cho diễn biến sau:
-            {prompt}
-            """
-            
-            with st.spinner("Đang chắp bút... Ông đợi một lát nhé!"):
-                response = model.generate_content(system_prompt)
-            
-            # Lưu nối tiếp nội dung mới vào bản thảo
-            new_chapter = f"\n\n### Ý tưởng: {prompt}\n\n{response.text}\n\n---\n"
-            st.session_state.stories[st.session_state.current_story]["content"] += new_chapter
-            st.rerun() 
-            
+            if not target_model and available_models:
+                target_model = available_models[0]
+                
+            if not target_model:
+                st.error("Lỗi: API Key của ông không có quyền truy cập vào bất kỳ bản AI nào.")
+            else:
+                model = genai.GenerativeModel(target_model)
+                
+                system_prompt = f"""Bạn là một tiểu thuyết gia chuyên nghiệp.
+                
+                BỐI CẢNH VÀ QUY TẮC CỐT LÕI (Bắt buộc tuân thủ):
+                {st.session_state.stories[st.session_state.current_story]["notes"]}
+                
+                TÓM TẮT CÁC CHƯƠNG TRƯỚC (Để giữ mạch truyện liền mạch):
+                {current_data["content"][-4000:]} 
+                
+                YÊU CẦU MỚI: Dựa vào bối cảnh và mạch truyện trên, hãy viết tiếp một chương truyện chi tiết cho diễn biến sau:
+                {prompt}
+                """
+                
+                with st.spinner("Đang chắp bút... Ông đợi một lát nhé!"):
+                    response = model.generate_content(system_prompt)
+                
+                new_chapter = f"\n\n### Ý tưởng: {prompt}\n\n{response.text}\n\n---\n"
+                st.session_state.stories[st.session_state.current_story]["content"] += new_chapter
+                st.rerun() 
+                
         except Exception as e:
-            st.error(f"Đã xảy ra lỗi: {e}")
+            st.error(f"Đã xảy ra lỗi hệ thống: {e}")
