@@ -62,14 +62,22 @@ st.markdown("""
         font-size: 17px !important;
         line-height: 1.7 !important;
     }
-    .chat-box {
-        background-color: #f1f5f9;
-        padding: 15px;
-        border-radius: 8px;
+    /* Style cho khung chat hội ý */
+    .chat-bubble-user {
+        background-color: #e2e8f0;
+        padding: 10px 14px;
+        border-radius: 12px;
+        margin: 6px 0;
+        text-align: right;
+        color: #1e293b;
+    }
+    .chat-bubble-ai {
+        background-color: #eff6ff;
+        padding: 10px 14px;
+        border-radius: 12px;
+        margin: 6px 0;
         border-left: 4px solid #3b82f6;
-        margin-bottom: 15px;
-        font-size: 14px;
-        color: #334155;
+        color: #1e293b;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -85,8 +93,8 @@ if 'stories' not in st.session_state:
             "plot": "",
             "content": "",
             "latest_suggestion": "",
-            "plot_chat_history": "", # Lưu lịch sử hội ý cốt truyện tổng thể
-            "chap_chat_history": ""  # Lưu lịch sử hội ý viết chương
+            "plot_messages": [], # Danh sách chat hội ý cốt truyện tổng thể (dạng danh sách tin nhắn)
+            "chap_messages": []  # Danh sách chat hội ý kịch bản chương
         }
     }
 if 'current_story' not in st.session_state:
@@ -112,8 +120,8 @@ with st.sidebar:
                 "plot": "",
                 "content": "",
                 "latest_suggestion": "",
-                "plot_chat_history": "",
-                "chap_chat_history": ""
+                "plot_messages": [],
+                "chap_messages": []
             }
             st.session_state.current_story = new_story_name
             st.rerun()
@@ -124,9 +132,9 @@ with st.sidebar:
 
 # --- KHÔNG GIAN LÀM VIỆC CHÍNH ---
 current_data = st.session_state.stories[st.session_state.current_story]
-for key in ["plot", "latest_suggestion", "plot_chat_history", "chap_chat_history"]:
+for key in ["plot", "latest_suggestion", "plot_messages", "chap_messages"]:
     if key not in current_data:
-        current_data[key] = ""
+        current_data[key] = [] if "messages" in key else ""
 
 st.title(f"📖 {st.session_state.current_story}")
 st.markdown("---")
@@ -136,36 +144,53 @@ st.markdown("### 🗺️ Quản Lý Cốt Truyện Tổng Thể")
 plot_col_chat, plot_col_main = st.columns(2, gap="large")
 
 with plot_col_chat:
-    st.markdown("💬 **Phần 1: Hội ý & Brainstorm Cốt Truyện với AI**")
-    plot_idea = st.text_area("Trao đổi ý tưởng, thảo luận hướng đi tổng thể:", key="plot_idea_input", height=120, placeholder="Ví dụ: Theo ông phân đoạn đầu cho nhân vật chính gặp biến cố gì thì hợp lý?")
+    st.markdown("💬 **Phần 1: Chat Hội Ý Tổng Thể (Hỏi đáp nhiều lượt với AI)**")
     
-    if st.button("💡 Gửi Hội Ý Cốt Truyện", use_container_width=True):
-        if not st.session_state.api_key:
-            st.error("⚠️ Chưa có API Key!")
-        elif not plot_idea:
-            st.warning("⚠️ Hãy nhập nội dung cần hội ý.")
+    # Hiển thị lịch sử chat tổng thể
+    with st.container(height=250):
+        if current_data["plot_messages"]:
+            for message in current_data["plot_messages"]:
+                if message["role"] == "user":
+                    st.markdown(f"**Bạn:** {message['content']}")
+                else:
+                    st.markdown(f"**AI:** {message['content']}")
+                st.markdown("---")
         else:
-            try:
-                genai.configure(api_key=st.session_state.api_key)
-                model = genai.GenerativeModel('gemini-3.6-flash')
-                chat_prompt = f"Với vai trò là trợ lý sáng tác kịch bản, hãy cùng tác giả thảo luận và góp ý cho ý tưởng tổng thể sau:\n{plot_idea}"
-                with st.spinner("AI đang phân tích ý tưởng..."):
-                    res = model.generate_content(chat_prompt)
-                current_data["plot_chat_history"] = f"**Hỏi:** {plot_idea}\n\n**AI Góp Ý:** {res.text}\n\n---\n" + current_data["plot_chat_history"]
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
-                
-    if current_data["plot_chat_history"]:
-        with st.container(height=180):
-            st.markdown(f'<div class="history-text">{current_data["plot_chat_history"]}</div>', unsafe_allow_html=True)
+            st.info("Chưa có nội dung hội ý. Hãy nhập câu hỏi bên dưới để bắt đầu trò chuyện với AI.")
+
+    # Form nhập tin nhắn chat hội ý cốt truyện (dùng key riêng biệt tránh đụng độ)
+    with st.form(key="plot_chat_form", clear_on_submit=True):
+        plot_chat_input = st.text_input("Nhập ý kiến trao đổi với AI về cốt truyện:", placeholder="Ví dụ: Góp ý cho tôi về phe đối lập...")
+        plot_submitted = st.form_submit_button("💬 Gửi Trao Đổi", use_container_width=True)
+        
+        if plot_submitted:
+            if not st.session_state.api_key:
+                st.error("⚠️ Chưa có API Key!")
+            elif plot_chat_input:
+                try:
+                    genai.configure(api_key=st.session_state.api_key)
+                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    
+                    # Chuyển đổi lịch sử sang định dạng chat của Gemini
+                    gemini_history = [{"role": m["role"], "parts": [m["content"]]} for m in current_data["plot_messages"]]
+                    chat_session = model.start_chat(history=gemini_history)
+                    
+                    with st.spinner("AI đang trả lời..."):
+                        response = chat_session.send_message(plot_chat_input)
+                    
+                    # Lưu lại lịch sử tin nhắn
+                    current_data["plot_messages"].append({"role": "user", "content": plot_chat_input})
+                    current_data["plot_messages"].append({"role": "model", "content": response.text})
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
 with plot_col_main:
     st.markdown("📝 **Phần 2: Bản Chốt Sườn Cốt Truyện Chính**")
     updated_plot = st.text_area(
         "Nội dung cốt truyện chính thức (để AI đọc khi viết chương):", 
         value=current_data["plot"], 
-        height=215, 
+        height=320, 
         max_chars=15000 
     )
     if st.button("💾 Lưu Bản Chốt Cốt Truyện", use_container_width=True):
@@ -222,29 +247,43 @@ with col_compose:
     if current_data["latest_suggestion"]:
         st.info(f"💡 **AI Gợi ý cho chương tiếp theo:**\n\n{current_data['latest_suggestion']}")
     
-    # PHẦN 1: HỘI Ý & THẢO LUẬN KỊCH BẢN CHƯƠNG VỚI AI
-    with st.expander("💬 Phần 1: Bấm vào đây để Hội ý kịch bản chương với AI (Nháp)", expanded=False):
-        chap_idea = st.text_area("Trao đổi các tình tiết trong chương với AI:", key="chap_idea_input", placeholder="Ví dụ: Theo ông cuộc đối thoại giữa 2 nhân vật nên căng thẳng hay ẩn ý?")
-        if st.button("💭 Gửi Hội Ý Chương Này"):
-            if not st.session_state.api_key:
-                st.error("⚠️ Chưa có API Key!")
-            elif not chap_idea:
-                st.warning("⚠️ Nhập nội dung hội ý.")
+    # PHẦN 1: CHAT HỘI Ý NHIỀU LƯỢT KỊCH BẢN CHƯƠNG VỚI AI
+    with st.expander("💬 Phần 1: Chat Hội Ý Kịch Bản Chương (Hỏi đáp liên tục với AI)", expanded=False):
+        
+        with st.container(height=220):
+            if current_data["chap_messages"]:
+                for message in current_data["chap_messages"]:
+                    if message["role"] == "user":
+                        st.markdown(f"**Bạn:** {message['content']}")
+                    else:
+                        st.markdown(f"**AI:** {message['content']}")
+                    st.markdown("---")
             else:
-                try:
-                    genai.configure(api_key=st.session_state.api_key)
-                    model = genai.GenerativeModel('gemini-3.6-flash')
-                    chat_p = f"Dựa trên cốt truyện tổng thể:\n{current_data['plot']}\n\nHãy thảo luận và góp ý cho ý tưởng viết chương sau của tác giả:\n{chap_idea}"
-                    with st.spinner("AI đang thảo luận kịch bản..."):
-                        res = model.generate_content(chat_p)
-                    current_data["chap_chat_history"] = f"**Hỏi:** {chap_idea}\n\n**AI Góp Ý:** {res.text}\n\n---\n" + current_data["chap_chat_history"]
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi: {e}")
-                    
-        if current_data["chap_chat_history"]:
-            st.markdown("---")
-            st.markdown(current_data["chap_chat_history"])
+                st.info("Chưa có trao đổi kịch bản chương. Hãy đặt câu hỏi bên dưới.")
+
+        with st.form(key="chap_chat_form", clear_on_submit=True):
+            chap_chat_input = st.text_input("Trao đổi tình tiết chương với AI:", placeholder="Ví dụ: Diễn biến tâm lý nhân vật đoạn này nên đẩy cao trào ra sao?")
+            chap_submitted = st.form_submit_button("💬 Gửi Trao Đổi Chương", use_container_width=True)
+            
+            if chap_submitted:
+                if not st.session_state.api_key:
+                    st.error("⚠️ Chưa có API Key!")
+                elif chap_chat_input:
+                    try:
+                        genai.configure(api_key=st.session_state.api_key)
+                        model = genai.GenerativeModel('gemini-3.6-flash')
+                        
+                        gemini_chap_history = [{"role": m["role"], "parts": [m["content"]]} for m in current_data["chap_messages"]]
+                        chap_chat_session = model.start_chat(history=gemini_chap_history)
+                        
+                        with st.spinner("AI đang thảo luận..."):
+                            chap_response = chap_chat_session.send_message(f"Dựa trên cốt truyện:\n{current_data['plot']}\n\nÝ kiến trao đổi:\n{chap_chat_input}")
+                        
+                        current_data["chap_messages"].append({"role": "user", "content": chap_chat_input})
+                        current_data["chap_messages"].append({"role": "model", "content": chap_response.text})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Lỗi: {e}")
 
     # PHẦN 2: BẢN CHỐT ĐỂ GỬI LỆNH VIẾT CHƯƠNG CHÍNH THỨC
     st.markdown("📝 **Phần 2: Bản Chốt Kịch Bản Để Viết Chương**")
